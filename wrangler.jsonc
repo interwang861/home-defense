@@ -1,9 +1,0 @@
-{
-  // Cloudflare Pages 项目配置。用命令行部署时会自动读取这个文件：
-  //   npx wrangler pages deploy
-  // name 是 Pages 项目名，决定默认域名 https://<name>.pages.dev
-  // 改名字的话，要和 Cloudflare 控制台里的项目名保持一致。
-  "name": "homeland-defense",
-  "compatibility_date": "2026-01-01",
-  "pages_build_output_dir": "dist"
-}
