@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+html, body {
+  background: #020617;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+@keyframes dig {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(-8deg); }
+}
+.dig { animation: dig 0.7s ease-in-out infinite; }
+
+@keyframes work {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.building-work { animation: work 0.5s ease-in-out infinite; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast-in { animation: toastIn 0.2s ease-out; }
+
+@keyframes portalPulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+.portal { animation: portalPulse 1.6s ease-in-out infinite; }
+
+@keyframes smokeUp {
+  0% { transform: translateY(0); opacity: 0.8; }
+  100% { transform: translateY(-6px); opacity: 0.4; }
+}
+.smoke { animation: smokeUp 1.2s ease-in-out infinite alternate; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
