@@ -1,8 +1,8 @@
 import type { GameState } from '../game/types';
-import { RES_INFO, RES_KEYS, powerDemand, powerSupply } from '../game/config';
+import { RES_INFO, RES_KEYS, bigEveryDays, powerDemand, powerSupply } from '../game/config';
 import { cap, gatherRates, isResUnlocked, nextAttackInfo } from '../game/logic';
-import { RES_ICON, Sprite } from '../game/sprites';
-import { Btn, fmt, fmtClock, fmtDur } from './ui';
+import { RES_ICON, Sprite, buildingSprite } from '../game/sprites';
+import { Btn, clockParts, cyclePosition, fmt, fmtDur } from './ui';
 import { cn } from '../utils/cn';
 
 const SCALES = [1, 10, 60, 600, 3600];
@@ -21,23 +21,45 @@ export function TopBar({
   const dem = powerDemand(s);
   const atk = nextAttackInfo(s);
   const urgent = atk.remaining < 3600;
+  const p = clockParts(s.gameTime);
+  const cyc = cyclePosition(s.gameTime, bigEveryDays(s.buildings.base));
   return (
     <header className="sticky top-0 z-30 border-b border-slate-700/60 bg-slate-900/90 backdrop-blur">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex items-center gap-2">
-          <Sprite id="base" size={34} />
+          <Sprite id={buildingSprite('base', Math.max(1, s.buildings.base))} size={34} />
           <div>
             <h1 className="text-lg font-black tracking-wide text-amber-300 leading-none">家园保卫战</h1>
             <div
-              className="flex items-center gap-1.5 text-[11px] text-slate-400"
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400"
               title="时钟跟随本机真实时间，所有设备同一时刻显示一致，加速档位不会影响它"
             >
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span className="flex items-center gap-1.5">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                <span className="font-semibold text-slate-200">
+                  {p.month}月{p.date}日 周{p.wd}
+                </span>
+                <span className="tabular-nums text-amber-200/90">{p.hh}:{p.mm}</span>
               </span>
-              <span className="font-medium text-slate-300">{fmtClock(s.gameTime)}</span>
-              <span>· 胜 {s.stats.wins} / 负 {s.stats.losses}</span>
+              <span
+                className={cn(
+                  'rounded px-1.5 py-px text-[10px] font-bold tabular-nums transition-colors',
+                  cyc.pos === cyc.total
+                    ? 'bg-fuchsia-500/25 text-fuchsia-200 ring-1 ring-fuchsia-400/50'
+                    : 'bg-slate-800 text-slate-400 ring-1 ring-slate-700',
+                )}
+                title={
+                  cyc.pos === cyc.total
+                    ? '今天 20:00 就是大防守！'
+                    : `大防守周期第 ${cyc.pos}/${cyc.total} 天，第 ${cyc.total} 天晚上 20:00 迎来大防守`
+                }
+              >
+                {cyc.pos === cyc.total ? '☠ 大防守今日' : `大防守 ${cyc.pos}/${cyc.total}`}
+              </span>
+              <span>胜 {s.stats.wins} / 负 {s.stats.losses}</span>
             </div>
           </div>
         </div>

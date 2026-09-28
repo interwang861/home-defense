@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Cost, Res } from '../game/types';
+import { CLOCK_EPOCH_MS } from '../game/config';
 import { RES_INFO, RES_KEYS } from '../game/config';
 import { RES_ICON, Sprite } from '../game/sprites';
 import { cn } from '../utils/cn';
@@ -24,13 +25,50 @@ export function fmtDur(sec: number): string {
   return `${s}秒`;
 }
 
-const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
+const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
+
+export interface ClockParts {
+  month: number;
+  date: number;
+  wd: string;
+  hh: string;
+  mm: string;
+  /** 绝对天数（0 = 锚点那天），用于推算大防守周期 */
+  dayIndex: number;
+}
+
+/**
+ * 游戏时钟就等于本机真实时间，所以直接还原成真实日期显示，
+ * 比「第 274 天」这种从锚点起算的天数直观得多。
+ */
+export function clockParts(gameTime: number): ClockParts {
+  const d = new Date(CLOCK_EPOCH_MS + Math.max(0, gameTime) * 1000);
+  return {
+    month: d.getUTCMonth() + 1,
+    date: d.getUTCDate(),
+    wd: WEEK_CN[d.getUTCDay()],
+    hh: String(d.getUTCHours()).padStart(2, '0'),
+    mm: String(d.getUTCMinutes()).padStart(2, '0'),
+    dayIndex: Math.floor(Math.max(0, gameTime) / 86400),
+  };
+}
 
 export function fmtClock(gameTime: number): string {
-  const day = Math.floor(gameTime / 86400) + 1;
-  const h = Math.floor((gameTime % 86400) / 3600);
-  const m = Math.floor((gameTime % 3600) / 60);
-  return `第${day}天 周${WEEK[(day - 1) % 7]} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const p = clockParts(gameTime);
+  return `${p.month}月${p.date}日 周${p.wd} ${p.hh}:${p.mm}`;
+}
+
+/** 日志用的紧凑格式 */
+export function fmtClockShort(gameTime: number): string {
+  const p = clockParts(gameTime);
+  return `${p.month}/${p.date} ${p.hh}:${p.mm}`;
+}
+
+/** 当前处于大防守周期的第几天（1 ~ total，第 total 天即大防守日） */
+export function cyclePosition(gameTime: number, everyDays: number): { pos: number; total: number } {
+  const p = clockParts(gameTime);
+  const D = p.dayIndex + 1;
+  return { pos: ((D - 1) % everyDays) + 1, total: everyDays };
 }
 
 export function CostView({ cost, res, className }: { cost: Cost; res?: Res; className?: string }) {

@@ -9,7 +9,7 @@ export const DAY = 86400;
  * 所以同一时刻在手机、电脑、虚拟机上看到的日期和钟点完全一致，
  * 「中午 12:10 进攻」「周日 20:00 大防守」也对应真实的中午和周日晚上。
  */
-const CLOCK_EPOCH_MS = Date.UTC(2025, 11, 29, 0, 0, 0);
+export const CLOCK_EPOCH_MS = Date.UTC(2025, 11, 29, 0, 0, 0);
 
 /** 当前本地时间对应的游戏内秒数 */
 export function realGameSeconds(): number {

@@ -13,7 +13,7 @@ import {
 } from '../game/logic';
 import { RES_ICON, RES_NODE, Sprite, TurretSprite, buildingSprite } from '../game/sprites';
 import type { Selection } from './Village';
-import { Bar, Btn, CostView, fmt, fmtClock, fmtDur } from './ui';
+import { Bar, Btn, CostView, fmt, fmtClockShort, fmtDur } from './ui';
 import { cn } from '../utils/cn';
 
 export type Act = (fn: (s: GameState) => string | void) => void;
@@ -472,7 +472,7 @@ export function LogPanel({ s }: { s: GameState }) {
             l.kind === 'info' && 'bg-slate-900/50 text-slate-300',
           )}
         >
-          <span className="mr-1 text-[10px] text-slate-500">{fmtClock(l.t)}</span>
+          <span className="mr-1 text-[10px] tabular-nums text-slate-500">{fmtClockShort(l.t)}</span>
           {l.text}
         </div>
       ))}
