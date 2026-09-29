@@ -23,6 +23,27 @@ html, body {
 }
 .toast-in { animation: toastIn 0.2s ease-out; }
 
+/* 家园地图上缓慢飘过的云影 */
+.cloud-drift {
+  background-image:
+    radial-gradient(ellipse 420px 220px at 20% 30%, #000 0%, transparent 70%),
+    radial-gradient(ellipse 520px 260px at 70% 60%, #000 0%, transparent 70%),
+    radial-gradient(ellipse 360px 180px at 45% 85%, #000 0%, transparent 70%);
+  background-size: 200% 200%;
+  animation: cloudDrift 90s linear infinite;
+}
+@keyframes cloudDrift {
+  0% { background-position: 0% 0%, 100% 50%, 50% 100%; }
+  100% { background-position: 100% 20%, 0% 70%, 150% 60%; }
+}
+
+@keyframes ringPulse {
+  0% { transform: scale(0.94); opacity: 0.9; }
+  70% { transform: scale(1.08); opacity: 0; }
+  100% { transform: scale(1.08); opacity: 0; }
+}
+.ring-pulse { animation: ringPulse 1.6s ease-out infinite; }
+
 @keyframes portalPulse {
   0%, 100% { opacity: 0.75; }
   50% { opacity: 1; }

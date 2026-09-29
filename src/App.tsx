@@ -12,6 +12,7 @@ import { BestiaryPanel, DetailPanel, EngineerQueue, LogPanel, ResidentsPanel, ty
 import { ArmyPanel } from './components/ArmyPanel';
 import { TechPanel } from './components/TechPanel';
 import { AttackAlert, BattleView, ResultModal } from './components/BattleView';
+import { DetailSheet } from './components/DetailSheet';
 import { Btn, fmtDur } from './components/ui';
 import { cn } from './utils/cn';
 
@@ -19,6 +20,19 @@ type Tab = 'detail' | 'residents' | 'army' | 'tech' | 'bestiary' | 'log';
 type Phase = 'idle' | 'alert' | 'battle';
 
 const SCALES = [1, 10, 60, 600, 3600];
+
+/** 窄屏（手机/竖屏平板）下改用底部弹窗显示升级面板 */
+function useMediaQuery(query: string) {
+  const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const fn = () => setMatch(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, [query]);
+  return match;
+}
 
 /**
  * 离线补算。时钟始终对齐真实时间，产出最多补 48 小时（按 1x 结算），
@@ -87,6 +101,8 @@ export default function App() {
   const [result, setResult] = useState<BattleResult | null>(null);
   const [offline, setOffline] = useState<string | null>(offlineRef.current);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
+  const isMobile = useMediaQuery('(max-width: 1023px)');
+  const [sheet, setSheet] = useState<Selection | null>(null);
 
   const changePhase = (p: Phase) => {
     phaseRef.current = p;
@@ -187,18 +203,21 @@ export default function App() {
 
   const onSelect = (x: Selection) => {
     setSel(x);
-    setTab('detail');
+    if (isMobile) setSheet(x);
+    else setTab('detail');
   };
 
   const idle = s.residents.filter((p) => p.job === 'idle').length;
+  // 手机上「详情」由底部弹窗承担，标签栏不再重复
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'detail', label: '详情' },
+    ...(isMobile ? [] : [{ key: 'detail' as Tab, label: '详情' }]),
     { key: 'residents', label: `居民${idle ? `(${idle}闲)` : ''}` },
     { key: 'army', label: '军队' },
     { key: 'tech', label: '科技' },
     { key: 'bestiary', label: '图鉴' },
     { key: 'log', label: '日志' },
   ];
+  const activeTab: Tab = isMobile && tab === 'detail' ? 'residents' : tab;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e293b,#020617)] text-white">
@@ -231,28 +250,32 @@ export default function App() {
         </section>
 
         <aside className="h-fit rounded-xl border border-slate-700 bg-slate-800/80 shadow-xl lg:sticky lg:top-[76px]">
-          <div className="flex border-b border-slate-700">
+          <div className="flex overflow-x-auto border-b border-slate-700">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={cn(
-                  'flex-1 px-1 py-2 text-xs font-bold transition sm:text-sm',
-                  tab === t.key ? 'border-b-2 border-amber-400 text-amber-300' : 'text-slate-400 hover:text-slate-200',
+                  'flex-1 whitespace-nowrap px-2 py-2.5 text-xs font-bold transition sm:text-sm',
+                  activeTab === t.key
+                    ? 'border-b-2 border-amber-400 bg-amber-400/5 text-amber-300'
+                    : 'border-b-2 border-transparent text-slate-400 hover:text-slate-200',
                 )}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          {tab === 'detail' && <DetailPanel s={s} sel={sel} act={act} />}
-          {tab === 'residents' && <ResidentsPanel s={s} act={act} />}
-          {tab === 'army' && <ArmyPanel s={s} act={act} />}
-          {tab === 'tech' && <TechPanel s={s} act={act} />}
-          {tab === 'bestiary' && <BestiaryPanel s={s} act={act} />}
-          {tab === 'log' && <LogPanel s={s} />}
+          {activeTab === 'detail' && <DetailPanel s={s} sel={sel} act={act} />}
+          {activeTab === 'residents' && <ResidentsPanel s={s} act={act} />}
+          {activeTab === 'army' && <ArmyPanel s={s} act={act} />}
+          {activeTab === 'tech' && <TechPanel s={s} act={act} />}
+          {activeTab === 'bestiary' && <BestiaryPanel s={s} act={act} />}
+          {activeTab === 'log' && <LogPanel s={s} />}
         </aside>
       </main>
+
+      {isMobile && <DetailSheet s={s} sel={sheet} act={act} onClose={() => setSheet(null)} />}
 
       {phase === 'alert' && <AttackAlert gs={s} onFight={onFight} onAuto={onAuto} />}
       {phase === 'battle' && battle && <BattleView battle={battle} gs={s} onRepair={onRepair} onDone={onBattleDone} />}

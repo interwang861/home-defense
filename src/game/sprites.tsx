@@ -4,16 +4,57 @@ import type { BuildingKey } from './types';
 
 /**
  * ============ 素材替换说明 ============
- * 所有素材都是 SVG <symbol>（viewBox 0 0 64 64）。在 SPRITE_IMAGES 中填写 id → 图片地址 即可替换：
+ * 内置素材是 SVG <symbol>（viewBox 0 0 64 64）。换成自己的图有两种方式：
+ *
+ * 【方式一 · 推荐】把图片丢进 src/assets/sprites/，文件名 = 素材 id，无需改任何代码。
+ *   例如 src/assets/sprites/base_t1.png 会自动替换 1~10 级主基地的造型。
+ *   支持 png / jpg / jpeg / webp / svg，建议 1:1 正方形、透明背景。
+ *   完整 id 清单见 src/assets/sprites/素材清单.md
+ *
+ *   如果文件名和内部 id 不一致（例如 main_base_t1.png / power_plant_t1.png），
+ *   在下面 FILE_ALIASES 里登记一次即可，已经登记好了你目前用的那批命名。
+ *
+ * 【方式二】在下面 SPRITE_IMAGES 里手写映射（优先级最高），适合图片放在 public/ 或用外链：
  *   goblin: '/images/goblin.png',
- *   base_t0: '/images/base_lv1-9.png',  base_t1: '/images/base_lv10-19.png' ...
- * 建筑 id 规则：{建筑}_t{阶段}，阶段 = floor(等级/10)，0~5（如 base_t0 ~ base_t5、house_t0 ~ house_t4）
- * 炮塔：turret_base_t0~5（底座）+ turret_gun_t0~5（炮管，以(32,32)为旋转中心，朝右）
- * 怪物默认朝左，我方单位默认朝右。图片放 public/images/ 目录，建议 1:1 透明 PNG。
+ *
+ * 阶段划分：每 10 级一段，t1 = 1~10 级，t2 = 11~20 级，… t5 = 41~50 级。
+ * 朝向约定：怪物朝左，我方单位朝右。
+ * 炮塔分两层：turret_base_t{n} 是底座，turret_gun_t{n} 是炮管（绕 (32,32) 旋转、朝右）。
  */
 export const SPRITE_IMAGES: Record<string, string> = {
   // goblin: '/images/goblin.png',
 };
+
+/** 扫描素材目录：文件名（不含扩展名）即素材 id */
+const AUTO_SPRITES = import.meta.glob('../assets/sprites/*.{png,jpg,jpeg,webp,svg}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+/** 素材文件名 → 内部 id。名字对不上的在这里登记一次即可 */
+const FILE_ALIASES: Record<string, string> = {
+  main_base_t1: 'base_t1', main_base_t2: 'base_t2', main_base_t3: 'base_t3',
+  main_base_t4: 'base_t4', main_base_t5: 'base_t5',
+  power_plant_t1: 'power_t1', power_plant_t2: 'power_t2', power_plant_t3: 'power_t3',
+  power_plant_t4: 'power_t4', power_plant_t5: 'power_t5',
+  engineer_house_t1: 'engineer_t1', engineer_house_t2: 'engineer_t2', engineer_house_t3: 'engineer_t3',
+};
+
+const AUTO_IMAGES: Record<string, string> = {};
+for (const path of Object.keys(AUTO_SPRITES)) {
+  const file = path.slice(path.lastIndexOf('/') + 1);
+  const name = file.replace(/\.[^.]+$/, '');
+  AUTO_IMAGES[FILE_ALIASES[name] ?? name] = AUTO_SPRITES[path];
+}
+
+/** 手写映射优先，其次是素材目录里同名文件，都没有就回落到内置 SVG */
+export function spriteImage(id: string): string | undefined {
+  return SPRITE_IMAGES[id] ?? AUTO_IMAGES[id];
+}
+
+/** 已被自定义图片替换的素材 id，方便在控制台核对 */
+export const CUSTOM_SPRITES = Object.keys(AUTO_IMAGES).filter((id) => !SPRITE_IMAGES[id]).concat(Object.keys(SPRITE_IMAGES));
 
 const SH = <ellipse cx="32" cy="60" rx="14" ry="3" fill="#00000040" />;
 const BSH = <ellipse cx="32" cy="60" rx="30" ry="3.5" fill="#00000045" />;
@@ -1031,7 +1072,13 @@ const S: Record<string, ReactNode> = {
 };
 
 // 分阶段建筑 & 炮塔
-const STRUCT_KEYS: BuildingKey[] = ['power', 'warehouse', 'barracks', 'factory', 'engineer', 'lab'];
+/** 每种建筑有几个外形阶段（= 满级 ÷ 10） */
+const TIER_COUNT: Record<string, number> = {
+  base: 5, power: 5, warehouse: 5, barracks: 5, factory: 5, airbase: 5, engineer: 3, lab: 4, house: 4,
+};
+/** 阶段(1~5) 映射到内置 SVG 的细节档位，跳过用不上的档 */
+const BUILD_DETAIL = [0, 1, 2, 4, 5];
+const TURRET_DETAIL = [0, 1, 3, 4, 5];
 const EXTRA: Partial<Record<BuildingKey, (t: number, p: Pal) => { extra?: ReactNode; back?: ReactNode }>> = {
   power: (t, p) => ({
     back:
@@ -1095,17 +1142,24 @@ const EXTRA: Partial<Record<BuildingKey, (t: number, p: Pal) => { extra?: ReactN
   }),
 };
 
-for (let t = 0; t <= 5; t++) {
-  const p = PAL[t];
-  S[`base_t${t}`] = baseSprite(t, p);
-  S[`airbase_t${t}`] = airbaseSprite(t, p);
-  S[`house_t${t}`] = houseSprite(t, p);
-  S[`turret_base_t${t}`] = turretBase(t);
-  S[`turret_gun_t${t}`] = turretGun(t);
-  for (const k of STRUCT_KEYS) {
-    const ex = EXTRA[k]?.(t, p) ?? {};
-    S[`${k}_t${t}`] = structure(t, p, EMBLEM[k](p), ex.extra, ex.back);
+for (const [key, count] of Object.entries(TIER_COUNT)) {
+  for (let t = 1; t <= count; t++) {
+    const d = BUILD_DETAIL[t - 1] ?? BUILD_DETAIL[BUILD_DETAIL.length - 1];
+    const p = PAL[d];
+    if (key === 'base') S[`base_t${t}`] = baseSprite(d, p);
+    else if (key === 'airbase') S[`airbase_t${t}`] = airbaseSprite(d, p);
+    else if (key === 'house') S[`house_t${t}`] = houseSprite(d, p);
+    else {
+      const bk = key as BuildingKey;
+      const ex = EXTRA[bk]?.(d, p) ?? {};
+      S[`${key}_t${t}`] = structure(d, p, EMBLEM[bk](p), ex.extra, ex.back);
+    }
   }
+}
+for (let t = 1; t <= 5; t++) {
+  const d = TURRET_DETAIL[t - 1];
+  S[`turret_base_t${t}`] = turretBase(d);
+  S[`turret_gun_t${t}`] = turretGun(d);
 }
 
 export function buildingSprite(key: BuildingKey | 'house', level: number): string {
@@ -1119,11 +1173,14 @@ export function SpriteDefs() {
   return (
     <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
       <defs>
-        {Object.entries(S).map(([id, node]) => (
-          <symbol key={id} id={`spr-${id}`} viewBox="0 0 64 64" overflow="visible">
-            {SPRITE_IMAGES[id] ? <image href={SPRITE_IMAGES[id]} x="0" y="0" width="64" height="64" /> : node}
-          </symbol>
-        ))}
+        {Object.entries(S).map(([id, node]) => {
+          const img = spriteImage(id);
+          return (
+            <symbol key={id} id={`spr-${id}`} viewBox="0 0 64 64" overflow="visible">
+              {img ? <image href={img} x="0" y="0" width="64" height="64" preserveAspectRatio="xMidYMax meet" /> : node}
+            </symbol>
+          );
+        })}
       </defs>
     </svg>
   );

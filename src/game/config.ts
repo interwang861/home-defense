@@ -187,8 +187,37 @@ export function upgradeCostFor(def: TargetDef, T: number, techCost: number, extr
   return makeCost(total, def.weights, T);
 }
 
+/**
+ * 外形阶段：每 10 级一段，1~10 级为第 1 段，41~50 级为第 5 段。
+ * 与素材命名 base_t1.png ~ base_t5.png 一致。
+ */
 export function tierOf(level: number, max = 50): number {
-  return Math.min(Math.floor(max / 10), Math.floor(level / 10), 5);
+  return Math.min(Math.floor(max / 10), Math.max(1, Math.ceil(level / 10)));
+}
+
+/** 每种建筑在各阶段的正式名称 */
+export const TIER_NAMES: Record<BuildingKey | 'house', string[]> = {
+  base: ['临时指挥哨所', '前线作战基地', '要塞化司令部', '合金指挥中心', '天穹战争堡垒'],
+  house: ['破旧木棚屋', '红砖小平房', '两层独栋住宅', '豪华公寓'],
+  power: ['柴油发电机棚', '燃煤电厂', '火力发电站', '核能发电站', '聚变反应堆'],
+  warehouse: ['原木储物棚', '砖砌仓库', '物流集散中心', '自动化仓储', '量子储存塔'],
+  barracks: ['民兵训练营', '木制营房', '正规军新兵营', '特种部队基地', '机甲战士机库'],
+  factory: ['改装车间', '装甲工坊', '战车装配厂', '重型兵工厂', '机甲制造中枢'],
+  airbase: ['前线野战机场', '小型军用机场', '正规空军基地', '战略航空基地', '天穹母舰平台'],
+  engineer: ['工匠小棚', '机械工坊', '工程研究实验室'],
+  lab: ['野战研究室', '军事科研所', '作战理论中心', '尖端科技研究院'],
+};
+
+export function tierName(key: BuildingKey | 'house', level: number): string {
+  const list = TIER_NAMES[key];
+  if (level <= 0 || !list?.length) return key === 'house' ? HOUSE_DEF.name : BUILDINGS[key].name;
+  return list[Math.min(list.length, tierOf(level, list.length * 10)) - 1];
+}
+
+/** 下一段进化的起始等级；已满段返回 0 */
+export function nextTierLevel(level: number, max: number): number {
+  const t = tierOf(level, max);
+  return t * 10 + 1 <= max ? t * 10 + 1 : 0;
 }
 
 // ================= 仓库/电力/房屋 =================
@@ -440,17 +469,17 @@ export function buildingHp(level: number) {
   return 500 + 180 * level + 12 * level * level;
 }
 
+/** 炮塔五个阶段的武器（与 turret_base_t1~t5 / turret_gun_t1~t5 一一对应） */
 export const TURRET_TIERS = [
   { name: '木制箭塔', cd: 1.0, splash: 0, mul: 1, shot: '#fde68a', kind: 'arrow' },
   { name: '加农炮塔', cd: 1.5, splash: 35, mul: 1.1, shot: '#f97316', kind: 'shell' },
-  { name: '双管炮塔', cd: 0.75, splash: 25, mul: 1.15, shot: '#fb923c', kind: 'shell' },
-  { name: '加特林塔', cd: 0.18, splash: 0, mul: 1.2, shot: '#fde047', kind: 'bullet' },
-  { name: '导弹塔', cd: 2.2, splash: 80, mul: 1.35, shot: '#ef4444', kind: 'missile' },
-  { name: '激光塔', cd: 0.5, splash: 20, mul: 1.5, shot: '#22d3ee', kind: 'laser' },
+  { name: '加特林塔', cd: 0.18, splash: 0, mul: 1.25, shot: '#fde047', kind: 'bullet' },
+  { name: '导弹塔', cd: 2.2, splash: 80, mul: 1.4, shot: '#ef4444', kind: 'missile' },
+  { name: '激光塔', cd: 0.5, splash: 20, mul: 1.55, shot: '#22d3ee', kind: 'laser' },
 ] as const;
 
 export function turretStats(level: number, techAtk = 0, techSpd = 0) {
-  const tier = TURRET_TIERS[tierOf(level)];
+  const tier = TURRET_TIERS[tierOf(level) - 1];
   const dps = 10 * Math.pow(1.09, level) * tier.mul * (1 + 0.05 * techAtk);
   const cd = tier.cd / (1 + 0.03 * techSpd);
   return { tier, atk: dps * tier.cd, cd, dps: dps * (1 + 0.03 * techSpd), range: 230 + 3 * level, splash: tier.splash, hp: 400 + 150 * level + 10 * level * level };

@@ -1,9 +1,9 @@
 import type { ReactElement } from 'react';
 import type { GameState, Job, ResKey, UpgradeTarget } from '../game/types';
 import {
-  BUILDINGS, CAT_UNITS, HOUSE_DEF, MONSTERS, RESIDENT_MAX_LEVEL, RES_INFO, RES_KEYS, TURRET_DEF, TURRET_TIERS, TURRET_UNLOCK,
+  BUILDINGS, CAT_UNITS, HOUSE_DEF, MONSTERS, RESIDENT_MAX_LEVEL, RES_INFO, RES_KEYS, TIER_NAMES, TURRET_DEF, TURRET_TIERS, TURRET_UNLOCK,
   baseStats, buildingHp, defensePower, engineerCount, gatherRate, houseCapacity, maxHouses, monsterMinTier,
-  monsterMultipliers, monsterUnlockAttack, popCap, waveBudgetRate,
+  monsterMultipliers, monsterUnlockAttack, nextTierLevel, popCap, tierName, waveBudgetRate,
   powerSupply, recruitCost, redAt, residentBonus, residentExpNeed, residentTrainCost, tierOf, totalCapacity, turretStats,
   unitUnlockLevel, warehouseCap, type UnitDef,
 } from '../game/config';
@@ -17,8 +17,6 @@ import { Bar, Btn, CostView, fmt, fmtClockShort, fmtDur } from './ui';
 import { cn } from '../utils/cn';
 
 export type Act = (fn: (s: GameState) => string | void) => void;
-
-const TIER_NAME = ['木造', '石砌', '砖堡', '钢铁', '科技', '传奇'];
 
 export function Stat({ label, now, next }: { label: string; now: string | number; next?: string | number }) {
   return (
@@ -63,7 +61,14 @@ function UpgradeBox({ s, target, act }: { s: GameState; target: UpgradeTarget; a
         </span>
       </div>
       <CostView cost={info.cost} res={s.res} />
-      {(info.level + 1) % 10 === 0 && <div className="text-[11px] text-fuchsia-300">✨ 升到 Lv.{info.level + 1} 后外形进化为【{TIER_NAME[Math.min(5, (info.level + 1) / 10)]}】</div>}
+      {(() => {
+        const key = target.kind === 'building' ? target.key : target.kind === 'house' ? ('house' as const) : null;
+        if (!key) return null;
+        const maxL = key === 'house' ? HOUSE_DEF.max : BUILDINGS[key].max;
+        const nl = nextTierLevel(info.level, maxL);
+        if (!nl) return null;
+        return <div className="text-[11px] text-fuchsia-300">✨ 升到 Lv.{nl} 进化为【{tierName(key, nl)}】</div>;
+      })()}
       <Btn className="w-full" disabled={!!block} onClick={() => act((d) => startUpgrade(d, target))}>
         {block ?? (info.level === 0 ? '建造' : '升级')}
       </Btn>
@@ -71,19 +76,33 @@ function UpgradeBox({ s, target, act }: { s: GameState; target: UpgradeTarget; a
   );
 }
 
-function TierStrip({ id, level, max, turret }: { id: string; level: number; max: number; turret?: boolean }) {
-  const tiers = Math.floor(max / 10) + 1;
-  const cur = tierOf(level, max);
+function TierStrip({ id, level, max, names, turret }: { id: string; level: number; max: number; names: string[]; turret?: boolean }) {
+  const tiers = Math.min(names.length, Math.floor(max / 10));
+  const cur = level > 0 ? tierOf(level, max) : 0;
   return (
     <div>
-      <div className="mb-1 text-[11px] text-slate-400">外形进化（每 10 级一次）</div>
-      <div className="flex gap-1 overflow-x-auto">
-        {Array.from({ length: Math.min(6, tiers) }).map((_, t) => (
-          <div key={t} className={cn('flex flex-col items-center rounded p-0.5', t === cur ? 'bg-amber-500/25 ring-1 ring-amber-400' : 'bg-slate-900/50', t > cur && 'opacity-50')}>
-            {turret ? <TurretSprite level={Math.max(1, t * 10)} size={34} /> : <Sprite id={id === 'house' ? `house_t${t}` : `${id}_t${t}`} size={34} />}
-            <span className="text-[9px] text-slate-300">Lv{t === 0 ? 1 : t * 10}</span>
-          </div>
-        ))}
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-bold tracking-wide text-slate-300">外形进化 · 每 10 级一段</span>
+        {cur > 0 && <span className="truncate text-[11px] font-bold text-amber-300">{names[cur - 1]}</span>}
+      </div>
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {Array.from({ length: tiers }).map((_, i) => {
+          const t = i + 1;
+          return (
+            <div
+              key={t}
+              className={cn(
+                'flex min-w-[64px] flex-1 flex-col items-center rounded-lg p-1 transition-colors',
+                t === cur ? 'bg-amber-500/20 ring-1 ring-amber-400' : 'bg-slate-900/50 ring-1 ring-transparent',
+                t > cur && 'opacity-45',
+              )}
+            >
+              {turret ? <TurretSprite level={t * 10 - 9} size={36} /> : <Sprite id={id === 'house' ? `house_t${t}` : `${id}_t${t}`} size={36} />}
+              <span className="mt-0.5 text-[9px] tabular-nums text-slate-500">Lv{(t - 1) * 10 + 1}-{t * 10}</span>
+              <span className={cn('text-center text-[9px] leading-tight', t === cur ? 'font-bold text-amber-200' : 'text-slate-300')}>{names[t - 1]}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -134,10 +153,11 @@ export function DetailPanel({ s, sel, act }: { s: GameState; sel: Selection | nu
     return (
       <div className="space-y-3 p-3">
         <div className="flex items-center gap-3">
-          <Sprite id={buildingSprite('house', h.level)} size={64} />
-          <div>
-            <h3 className="text-lg font-bold text-white">居民房屋 #{s.houses.indexOf(h) + 1}</h3>
-            <p className="text-sm text-amber-300">Lv.{h.level} / {HOUSE_DEF.max}</p>
+          <Sprite id={buildingSprite('house', h.level)} size={68} className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            {h.level > 0 && <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">居民房屋 #{s.houses.indexOf(h) + 1}</p>}
+            <h3 className="truncate text-lg font-black leading-tight text-white">{h.level > 0 ? tierName('house', h.level) : '房屋工地'}</h3>
+            <p className="text-sm font-bold text-amber-300">Lv.{h.level} / {HOUSE_DEF.max}</p>
           </div>
         </div>
         <p className="text-xs text-slate-300">{HOUSE_DEF.desc}</p>
@@ -146,7 +166,7 @@ export function DetailPanel({ s, sel, act }: { s: GameState; sel: Selection | nu
           <Stat label="家园总容量" now={`${s.residents.length}/${totalCapacity(s)}`} />
           <Stat label="下次扩容" now={h.level >= 40 ? '已达最大 5 人' : `Lv.${(Math.floor(h.level / 10) + 1) * 10}`} />
         </div>
-        <TierStrip id="house" level={h.level} max={HOUSE_DEF.max} />
+        <TierStrip id="house" level={h.level} max={HOUSE_DEF.max} names={TIER_NAMES.house} />
         <UpgradeBox s={s} target={{ kind: 'house', id: h.id }} act={act} />
       </div>
     );
@@ -158,7 +178,7 @@ export function DetailPanel({ s, sel, act }: { s: GameState; sel: Selection | nu
     const locked = s.buildings.base < TURRET_UNLOCK[i];
     const cur = turretStats(Math.max(1, lvl), s.tech.turretAtk, s.tech.turretSpd);
     const nx = turretStats(Math.min(TURRET_DEF.max, lvl + 1), s.tech.turretAtk, s.tech.turretSpd);
-    const nextTierLvl = (tierOf(lvl) + 1) * 10;
+    const nextTierLvl = nextTierLevel(lvl, TURRET_DEF.max);
     return (
       <div className="space-y-3 p-3">
         <div className="flex items-center gap-3">
@@ -177,9 +197,9 @@ export function DetailPanel({ s, sel, act }: { s: GameState; sel: Selection | nu
           <Stat label="射程" now={cur.range} next={nx.range} />
           <Stat label="范围伤害" now={cur.splash || '无'} />
           <Stat label="耐久" now={fmt(cur.hp)} next={fmt(nx.hp)} />
-          {nextTierLvl <= 50 && <Stat label="下次进化" now={`Lv.${nextTierLvl} → ${TURRET_TIERS[Math.min(5, nextTierLvl / 10)].name}`} />}
+          {nextTierLvl > 0 && <Stat label="下次进化" now={`Lv.${nextTierLvl} → ${TURRET_TIERS[tierOf(nextTierLvl) - 1].name}`} />}
         </div>
-        <TierStrip id="turret" level={lvl} max={50} turret />
+        <TierStrip id="turret" level={lvl} max={TURRET_DEF.max} names={TURRET_TIERS.map((t) => t.name)} turret />
         <UpgradeBox s={s} target={{ kind: 'turret', idx: i }} act={act} />
       </div>
     );
@@ -230,16 +250,17 @@ export function DetailPanel({ s, sel, act }: { s: GameState; sel: Selection | nu
   return (
     <div className="space-y-3 p-3">
       <div className="flex items-center gap-3">
-        <Sprite id={buildingSprite(key, Math.max(1, lvl))} size={64} className={cn(lvl === 0 && 'opacity-50 grayscale')} />
-        <div>
-          <h3 className="text-lg font-bold text-white">{def.name}</h3>
-          <p className="text-sm text-amber-300">{locked ? `🔒 主基地 ${def.unlockBase} 级解锁` : `Lv.${lvl} / ${def.max}`}</p>
+        <Sprite id={buildingSprite(key, Math.max(1, lvl))} size={68} className={cn('shrink-0', lvl === 0 && 'opacity-50 grayscale')} />
+        <div className="min-w-0 flex-1">
+          {lvl > 0 && !locked && <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{def.name}</p>}
+          <h3 className="truncate text-lg font-black leading-tight text-white">{lvl > 0 && !locked ? tierName(key, lvl) : def.name}</h3>
+          <p className="text-sm font-bold text-amber-300">{locked ? `🔒 主基地 ${def.unlockBase} 级解锁` : `Lv.${lvl} / ${def.max}`}</p>
           {def.red[1] > 0 && <p className="text-[10px] text-slate-400">升级CD较主基地减少 {def.red[0] * 100}%~{def.red[1] * 100}%</p>}
         </div>
       </div>
       <p className="text-xs text-slate-300">{def.desc}</p>
       <div className="space-y-1">{stats}</div>
-      <TierStrip id={key} level={lvl} max={def.max} />
+      <TierStrip id={key} level={lvl} max={def.max} names={TIER_NAMES[key]} />
       <UpgradeBox s={s} target={{ kind: 'building', key }} act={act} />
     </div>
   );

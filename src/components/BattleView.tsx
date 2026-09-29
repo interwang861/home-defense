@@ -391,7 +391,7 @@ export function AttackAlert({ gs, onFight, onAuto }: { gs: GameState; onFight: (
   const totalArmy = armyList.reduce((a, [, c]) => a + c, 0);
   const cap = fieldCapOf(big);
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-[46] flex items-center justify-center bg-black/70 p-4">
       <div className={cn('w-full max-w-lg rounded-2xl border-2 bg-slate-900 p-5 shadow-2xl', big ? 'border-fuchsia-500' : 'border-rose-500')}>
         <div className="text-center">
           <div className="text-4xl">{big ? '☠️' : '⚠️'}</div>
